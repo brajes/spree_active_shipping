@@ -5,6 +5,7 @@
 require 'digest/md5'
 require 'iconv' if RUBY_VERSION.to_f < 1.9
 require_dependency 'spree/calculator'
+require 'pp'
 
 module Spree
   class Calculator < ActiveRecord::Base
@@ -44,7 +45,6 @@ module Spree
               retrieve_rates(origin, destination, order_packages)
             end
           end
-
 
           raise rates_result if rates_result.kind_of?(Spree::ShippingError)
           return nil if rates_result.empty?
@@ -148,8 +148,6 @@ module Spree
           end
         end
 
-
-
         private
 
         def convert_order_to_weights_array(order)
@@ -158,7 +156,10 @@ module Spree
           max_weight = get_max_weight(order)
 
           weights = order.line_items.map do |line_item|
-            item_weight = line_item.variant.weight.to_f
+            option_values = line_item.order_variant
+            # sukamcopy
+            item_weight = line_item.variant.package_weight(option_values).to_f
+            # item_weight = line_item.variant.weight.to_f
             item_weight = default_weight if item_weight <= 0
             item_weight *= multiplier
 
@@ -194,6 +195,18 @@ module Spree
           max_weight = get_max_weight(order)
           packages = []
 
+          # sukamcopy
+          order.line_items.each do |line_item|
+            v = line_item.variant
+            option_values = line_item.order_variant
+            if v.package_weight <= max_weight or max_weight == 0
+              packages << [v.package_weight(option_values) * multiplier, v.package_length(option_values), v.package_width(option_values), v.package_height(option_values)]
+            else
+              raise Spree::ShippingError.new("#{I18n.t(:shipping_error)}: The maximum per package weight for the selected service from the selected country is #{max_weight} ounces.")
+            end
+          end
+
+=begin #original code
           order.line_items.each do |line_item|
             line_item.product_packages.each do |product_package|
               if product_package.weight <= max_weight or max_weight == 0
@@ -205,7 +218,7 @@ module Spree
               end
             end
           end
-
+=end
           packages
         end
 
@@ -249,6 +262,7 @@ module Spree
           end
 
           max_weight
+          0
         end
 
         def cache_key(order)
