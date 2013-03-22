@@ -37,24 +37,52 @@ module Spree
                                      :city => addr.city,
                                      :zip => addr.zipcode)
 
-          rates_result = Rails.cache.fetch(cache_key(order)) do
-            order_packages = packages(order)
-            if order_packages.empty?
-              {}
-            else
-              retrieve_rates(origin, destination, order_packages)
+          units = Spree::ActiveShipping::Config[:units].to_sym
+          multiplier = Spree::ActiveShipping::Config[:unit_multiplier]
+
+          order_packages = []
+          order.line_items.each do |line_item|
+            v = line_item.variant
+            option_values = line_item.order_variant.option_values
+            variant_packages = v.packages(option_values)
+
+            variant_packages.each do |vp|
+              if vp['units'].present?
+                package_units = vp['units'].to_sym
+              end
+
+              if vp['cylinder'].present? and vp['cylinder'] == true
+                order_packages << Package.new(vp['weight'] * multiplier, [vp['long'], vp['diameter']], :units => package_units)
+              else
+                order_packages << Package.new(vp['weight'] * multiplier, [vp['height'], vp['width'], vp['length']], :units => package_units)
+              end
             end
           end
 
-          raise rates_result if rates_result.kind_of?(Spree::ShippingError)
-          return nil if rates_result.empty?
-          rate = rates_result[self.class.description]
+          unless order.has_incomplete_designs?
+            #rates_result = Rails.cache.fetch(cache_key(order)) do
+            #  retrieve_rates(origin, destination, order_packages) #
 
-          return nil unless rate
-          rate = rate.to_f + (Spree::ActiveShipping::Config[:handling_fee].to_f || 0.0)
 
-          # divide by 100 since active_shipping rates are expressed as cents
-          return rate/100.0
+            #  if order_packages.empty?
+            #    {}
+            #  else
+            #    retrieve_rates(origin, destination, order_packages)
+            # end
+            #end
+
+            rates_result = retrieve_rates(origin, destination, order_packages)
+
+            raise rates_result if rates_result.kind_of?(Spree::ShippingError)
+            return nil if rates_result.empty?
+            rate = rates_result[self.class.description]
+
+            return nil unless rate
+            rate = rate.to_f + (Spree::ActiveShipping::Config[:handling_fee].to_f || 0.0)
+
+            # divide by 100 since active_shipping rates are expressed as cents
+            return rate/100.0
+          end
         end
 
 
@@ -118,6 +146,7 @@ module Spree
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
             Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
+
             raise error
           end
 
@@ -156,10 +185,17 @@ module Spree
           max_weight = get_max_weight(order)
 
           weights = order.line_items.map do |line_item|
-            option_values = line_item.order_variant
+            v = line_item.variant
+            option_values = line_item.order_variant.option_values
+            variant_packages = v.packages(option_values)
+
+            variant_packages.each do |vp|
+              packages << [vp.weight * multiplier, v.height, v.width, v.length]
+            end
+
             # sukamcopy
-            item_weight = line_item.variant.package_weight(option_values).to_f
-            # item_weight = line_item.variant.weight.to_f
+            #item_weight = line_item.variant.package_weight(option_values).to_f
+            item_weight = line_item.variant.weight.to_f
             item_weight = default_weight if item_weight <= 0
             item_weight *= multiplier
 
@@ -198,12 +234,20 @@ module Spree
           # sukamcopy
           order.line_items.each do |line_item|
             v = line_item.variant
-            option_values = line_item.order_variant
-            if v.package_weight <= max_weight or max_weight == 0
-              packages << [v.package_weight(option_values) * multiplier, v.package_length(option_values), v.package_width(option_values), v.package_height(option_values)]
+            option_values = line_item.order_variant.option_values
+            variant_packages = v.packages(option_values)
+
+            variant_packages.each do |vp|
+              packages << [vp.weight * multiplier, v.height, v.width, v.length]
+            end
+
+=begin
+if v.package_weight <= max_weight or max_weight == 0
+              packages << [v.package_weight(option_values) * multiplier, v.package_height(option_values), v.package_width(option_values), v.package_length(option_values)]
             else
               raise Spree::ShippingError.new("#{I18n.t(:shipping_error)}: The maximum per package weight for the selected service from the selected country is #{max_weight} ounces.")
             end
+=end
           end
 
 =begin #original code
