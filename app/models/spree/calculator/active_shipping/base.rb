@@ -45,12 +45,13 @@ module Spree
             v = line_item.variant
             option_values = line_item.order_variant.option_values
             variant_packages = v.packages(option_values)
-
+            pp 'hrere'
+            pp variant_packages
             variant_packages.each do |vp|
               if vp['units'].present?
                 package_units = vp['units'].to_sym
               end
-
+pp 'hrere2'
               if vp['cylinder'].present? and vp['cylinder'] == true
                 order_packages << Package.new(vp['weight'] * multiplier, [vp['long'], vp['diameter']], :units => package_units)
               else
@@ -58,21 +59,25 @@ module Spree
               end
             end
           end
+          
+          #unless order.has_incomplete_designs?
+=begin
+            rates_result = Rails.cache.fetch(cache_key(order)) do
+              retrieve_rates(origin, destination, order_packages) #
 
-          unless order.has_incomplete_designs?
-            #rates_result = Rails.cache.fetch(cache_key(order)) do
-            #  retrieve_rates(origin, destination, order_packages) #
 
+              #if order_packages.empty?
+              #  {}
+              #else
+              #  retrieve_rates(origin, destination, order_packages)
+              #end
+            end
+=end
 
-            #  if order_packages.empty?
-            #    {}
-            #  else
-            #    retrieve_rates(origin, destination, order_packages)
-            # end
-            #end
+            
 
             rates_result = retrieve_rates(origin, destination, order_packages)
-
+pp rates_result
             raise rates_result if rates_result.kind_of?(Spree::ShippingError)
             return nil if rates_result.empty?
             rate = rates_result[self.class.description]
@@ -82,7 +87,7 @@ module Spree
 
             # divide by 100 since active_shipping rates are expressed as cents
             return rate/100.0
-          end
+          #end
         end
 
 
@@ -97,9 +102,10 @@ module Spree
                                      :state => (addr.state ? addr.state.abbr : addr.state_name),
                                      :city => addr.city,
                                      :zip => addr.zipcode)
-          timings_result = Rails.cache.fetch(cache_key(order)+"-timings") do
+          #timings_result = #Rails.cache.fetch(cache_key(order)+"-timings") do
             retrieve_timings(origin, destination, packages(order))
-          end
+          #end
+          timings_result = retrieve_timings(origin, destination, packages(order))
           raise timings_result if timings_result.kind_of?(Spree::ShippingError)
           return nil if timings_result.nil? || !timings_result.is_a?(Hash) || timings_result.empty?
           return timings_result[self.description]
@@ -145,7 +151,7 @@ module Spree
             end
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
-            Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
+            #Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
 
             raise error
           end
@@ -172,7 +178,7 @@ module Spree
             end
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
-            Rails.cache.write @cache_key+"-timings", error #write error to cache to prevent constant re-lookups
+            #Rails.cache.write @cache_key+"-timings", error #write error to cache to prevent constant re-lookups
             raise error
           end
         end
