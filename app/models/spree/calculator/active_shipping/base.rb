@@ -59,35 +59,29 @@ pp 'hrere2'
               end
             end
           end
-          
-          #unless order.has_incomplete_designs?
-=begin
+
+
+          unless Rails.env.development?
             rates_result = Rails.cache.fetch(cache_key(order)) do
-              retrieve_rates(origin, destination, order_packages) #
-
-
-              #if order_packages.empty?
-              #  {}
-              #else
-              #  retrieve_rates(origin, destination, order_packages)
-              #end
+              if order_packages.empty?
+                {}
+              else
+                retrieve_rates(origin, destination, order_packages)
+              end
             end
-=end
-
-            
-
+          else
             rates_result = retrieve_rates(origin, destination, order_packages)
-pp rates_result
-            raise rates_result if rates_result.kind_of?(Spree::ShippingError)
-            return nil if rates_result.empty?
-            rate = rates_result[self.class.description]
+          end
 
-            return nil unless rate
-            rate = rate.to_f + (Spree::ActiveShipping::Config[:handling_fee].to_f || 0.0)
+          raise rates_result if rates_result.kind_of?(Spree::ShippingError)
+          return nil if rates_result.empty?
+          rate = rates_result[self.class.description]
 
-            # divide by 100 since active_shipping rates are expressed as cents
-            return rate/100.0
-          #end
+          return nil unless rate
+          rate = rate.to_f + (Spree::ActiveShipping::Config[:handling_fee].to_f || 0.0)
+
+          # divide by 100 since active_shipping rates are expressed as cents
+          return rate/100.0
         end
 
 
@@ -102,10 +96,15 @@ pp rates_result
                                      :state => (addr.state ? addr.state.abbr : addr.state_name),
                                      :city => addr.city,
                                      :zip => addr.zipcode)
-          #timings_result = #Rails.cache.fetch(cache_key(order)+"-timings") do
-            retrieve_timings(origin, destination, packages(order))
-          #end
-          timings_result = retrieve_timings(origin, destination, packages(order))
+
+          unless Rails.env.development?
+            timings_result = Rails.cache.fetch(cache_key(order)+"-timings") do
+              retrieve_timings(origin, destination, packages(order))
+            end
+          else
+            timings_result = retrieve_timings(origin, destination, packages(order))
+          end
+
           raise timings_result if timings_result.kind_of?(Spree::ShippingError)
           return nil if timings_result.nil? || !timings_result.is_a?(Hash) || timings_result.empty?
           return timings_result[self.description]
@@ -151,7 +150,7 @@ pp rates_result
             end
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
-            #Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
+            Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
 
             raise error
           end
@@ -178,7 +177,7 @@ pp rates_result
             end
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
-            #Rails.cache.write @cache_key+"-timings", error #write error to cache to prevent constant re-lookups
+            Rails.cache.write @cache_key+"-timings", error #write error to cache to prevent constant re-lookups
             raise error
           end
         end
