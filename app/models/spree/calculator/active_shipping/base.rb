@@ -62,6 +62,7 @@ pp 'hrere2'
 
 
           unless Rails.env.development?
+            pp "Fetching from cache...."
             rates_result = Rails.cache.fetch(cache_key(order)) do
               if order_packages.empty?
                 {}
