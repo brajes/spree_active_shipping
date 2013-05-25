@@ -25,6 +25,13 @@ module Spree
           else
             order = object
           end
+
+          #pp order.state
+
+          #return nil if ['checkout', 'payment', 'confirm', 'complete'].include?(order.state)
+
+          #return nil unless order.has_step?("delivery")
+
           origin= Location.new(:country => Spree::ActiveShipping::Config[:origin_country],
                                :city => Spree::ActiveShipping::Config[:origin_city],
                                :state => Spree::ActiveShipping::Config[:origin_state],
@@ -45,13 +52,10 @@ module Spree
             v = line_item.variant
             option_values = line_item.order_variant.option_values
             variant_packages = v.packages(option_values)
-            pp 'hrere'
-            pp variant_packages
             variant_packages.each do |vp|
               if vp['units'].present?
                 package_units = vp['units'].to_sym
               end
-pp 'hrere2'
               if vp['cylinder'].present? and vp['cylinder'] == true
                 order_packages << Package.new(vp['weight'] * multiplier, [vp['long'], vp['diameter']], :units => package_units)
               else
@@ -62,7 +66,7 @@ pp 'hrere2'
 
 
           unless Rails.env.development?
-            pp "Fetching from cache...."
+            pp "retrieve from cache"
             rates_result = Rails.cache.fetch(cache_key(order)) do
               if order_packages.empty?
                 {}
@@ -122,6 +126,7 @@ pp 'hrere2'
         def retrieve_rates(origin, destination, packages)
           begin
             response = carrier.find_rates(origin, destination, packages)
+            pp response
             # turn this beastly array into a nice little hash
             rates = response.rates.collect do |rate|
               # decode html entities for xml-based APIs, ie Canada Post
