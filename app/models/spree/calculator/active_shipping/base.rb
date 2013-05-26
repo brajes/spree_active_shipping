@@ -32,6 +32,9 @@ module Spree
 
           #return nil unless order.has_step?("delivery")
 
+          adjustment = order.adjustments.where(:label => "Shipping").first
+          return adjustment.amount.to_f if adjustment and adjustment.amount
+
           origin= Location.new(:country => Spree::ActiveShipping::Config[:origin_country],
                                :city => Spree::ActiveShipping::Config[:origin_city],
                                :state => Spree::ActiveShipping::Config[:origin_state],
